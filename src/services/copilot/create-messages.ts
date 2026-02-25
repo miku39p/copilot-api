@@ -14,6 +14,16 @@ import { fetchCopilotWithRetry } from "~/services/copilot/request"
 export type MessagesStream = ReturnType<typeof events>
 export type CreateMessagesReturn = AnthropicResponse | MessagesStream
 
+const SUPPORTED_BETA_FEATURES = new Set(["advanced-tool-use-2025-11-20"])
+
+function filterBetaHeader(header: string): string | undefined {
+  const supported = header
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => SUPPORTED_BETA_FEATURES.has(s))
+  return supported.length > 0 ? supported.join(",") : undefined
+}
+
 export const createMessages = async (
   payload: AnthropicMessagesPayload,
   anthropicBetaHeader?: string,
@@ -33,14 +43,20 @@ export const createMessages = async (
       : true
   }
 
+  // Remove unsupported fields that Copilot API rejects
+  // biome-ignore lint/performance/noDelete: cleaning up unsupported fields
+  delete (payload as unknown as Record<string, unknown>).context_management
+
   const buildHeaders = () => {
     const headers: Record<string, string> = {
       ...copilotHeaders(state, enableVision),
       "X-Initiator": isInitiateRequest ? "user" : "agent",
     }
 
-    if (anthropicBetaHeader) {
-      headers["anthropic-beta"] = anthropicBetaHeader
+    const filteredBeta =
+      anthropicBetaHeader ? filterBetaHeader(anthropicBetaHeader) : undefined
+    if (filteredBeta) {
+      headers["anthropic-beta"] = filteredBeta
     } else if (payload.thinking?.budget_tokens) {
       headers["anthropic-beta"] = "interleaved-thinking-2025-05-14"
     }

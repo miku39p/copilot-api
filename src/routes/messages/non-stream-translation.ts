@@ -33,7 +33,7 @@ export const THINKING_TEXT = "Thinking..."
 export function translateToOpenAI(
   payload: AnthropicMessagesPayload,
 ): ChatCompletionsPayload {
-  const modelId = translateModelName(payload.model)
+  const modelId = payload.model
   const model = state.models?.data.find((m) => m.id === modelId)
   const thinkingBudget = getThinkingBudget(payload, model)
   return {
@@ -74,16 +74,6 @@ function getThinkingBudget(
     }
   }
   return undefined
-}
-
-function translateModelName(model: string): string {
-  // Subagent requests use a specific model number which Copilot doesn't support
-  if (model.startsWith("claude-sonnet-4-")) {
-    return model.replace(/^claude-sonnet-4-.*/, "claude-sonnet-4")
-  } else if (model.startsWith("claude-opus-4-")) {
-    return model.replace(/^claude-opus-4-.*/, "claude-opus-4")
-  }
-  return model
 }
 
 function translateAnthropicMessagesToOpenAI(

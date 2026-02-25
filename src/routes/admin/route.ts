@@ -8,6 +8,7 @@ import {
   setActiveAccount,
   type Account,
 } from "~/lib/accounts"
+import { getConfig, saveConfig } from "~/lib/config"
 import { copilotTokenManager } from "~/lib/copilot-token-manager"
 import { state } from "~/lib/state"
 import { getDeviceCode } from "~/services/github/get-device-code"
@@ -328,6 +329,47 @@ adminRoutes.get("/api/auth/status", async (c) => {
         }
       : null,
   })
+})
+
+// Model Mapping API
+adminRoutes.get("/api/model-mappings", (c) => {
+  const config = getConfig()
+  return c.json({ modelMapping: config.modelMapping ?? {} })
+})
+
+adminRoutes.put("/api/model-mappings/:from", async (c) => {
+  const from = c.req.param("from")
+  const body = await c.req.json<{ to: string }>()
+
+  if (!body.to || typeof body.to !== "string") {
+    return c.json(
+      {
+        error: { message: '"to" field is required', type: "validation_error" },
+      },
+      400,
+    )
+  }
+
+  const config = getConfig()
+  const modelMapping = { ...config.modelMapping, [from]: body.to }
+  await saveConfig({ ...config, modelMapping })
+  return c.json({ success: true, from, to: body.to })
+})
+
+adminRoutes.delete("/api/model-mappings/:from", async (c) => {
+  const from = c.req.param("from")
+  const config = getConfig()
+
+  if (!config.modelMapping || !(from in config.modelMapping)) {
+    return c.json(
+      { error: { message: "Mapping not found", type: "not_found" } },
+      404,
+    )
+  }
+
+  const { [from]: _removed, ...rest } = config.modelMapping
+  await saveConfig({ ...config, modelMapping: rest })
+  return c.json({ success: true })
 })
 
 // Serve static HTML for admin UI

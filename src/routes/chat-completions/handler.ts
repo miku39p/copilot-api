@@ -3,6 +3,7 @@ import type { Context } from "hono"
 import consola from "consola"
 import { streamSSE, type SSEMessage } from "hono/streaming"
 
+import { getMappedModel } from "~/lib/config"
 import { createHandlerLogger } from "~/lib/logger"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { state } from "~/lib/state"
@@ -22,6 +23,8 @@ export async function handleCompletion(c: Context) {
   let payload = await c.req.json<ChatCompletionsPayload>()
   consola.info(`[Request] model: ${payload.model}`)
   logger.debug("Request payload:", JSON.stringify(payload).slice(-400))
+
+  payload.model = getMappedModel(payload.model)
 
   // Find the selected model
   const selectedModel = state.models?.data.find(

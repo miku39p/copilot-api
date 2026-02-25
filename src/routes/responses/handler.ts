@@ -2,7 +2,7 @@ import type { Context } from "hono"
 
 import { streamSSE } from "hono/streaming"
 
-import { getConfig } from "~/lib/config"
+import { getConfig, getMappedModel } from "~/lib/config"
 import { createHandlerLogger } from "~/lib/logger"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { state } from "~/lib/state"
@@ -24,6 +24,8 @@ export const handleResponses = async (c: Context) => {
 
   const payload = await c.req.json<ResponsesPayload>()
   logger.debug("Responses request payload:", JSON.stringify(payload))
+
+  payload.model = getMappedModel(payload.model)
 
   useFunctionApplyPatch(payload)
   filterUnsupportedTools(payload)

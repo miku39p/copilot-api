@@ -150,6 +150,7 @@ export const adminHtml = `<!DOCTYPE html>
       <button class="tab active" data-tab="accounts">Accounts</button>
       <button class="tab" data-tab="models">Models</button>
       <button class="tab" data-tab="usage">Usage</button>
+      <button class="tab" data-tab="model-mappings">Model Mappings</button>
     </div>
     <div class="tab-content active" id="tab-accounts">
       <div class="card">
@@ -185,6 +186,33 @@ export const adminHtml = `<!DOCTYPE html>
           </button>
         </div>
         <div id="usageContent"><div class="empty-state">Loading usage data...</div></div>
+      </div>
+    </div>
+    <div class="tab-content" id="tab-model-mappings">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Model Mappings</span>
+          <button class="btn btn-primary btn-sm" id="addMappingBtn">+ Add Mapping</button>
+        </div>
+        <div id="mappingFormArea" style="display:none; margin-bottom:1rem; padding:0 1rem;">
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+            <input class="select" id="mappingFrom" placeholder="From model" style="margin:0; flex:1;">
+            <span style="color:#8b949e; font-size:1.2rem;">\u2192</span>
+            <select class="select" id="mappingTo" style="margin:0; flex:1;"><option value="">Loading models...</option></select>
+            <button class="btn btn-primary btn-sm" id="saveMappingBtn">Save</button>
+            <button class="btn btn-sm" id="cancelMappingBtn">Cancel</button>
+          </div>
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:0.875rem;">
+          <thead>
+            <tr style="color:#8b949e; text-align:left; border-bottom:1px solid #30363d;">
+              <th style="padding:0.5rem 1rem;">From</th>
+              <th style="padding:0.5rem 1rem;">To</th>
+              <th style="padding:0.5rem 1rem; width:80px;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="mappingList"><tr><td colspan="3" class="empty-state">Loading...</td></tr></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -228,6 +256,7 @@ export const adminHtml = `<!DOCTYPE html>
         document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
         if (tab.dataset.tab === 'models') fetchModels();
         if (tab.dataset.tab === 'usage') fetchUsage();
+        if (tab.dataset.tab === 'model-mappings') fetchMappings();
       });
     });
     async function fetchAccounts() {
@@ -412,6 +441,80 @@ export const adminHtml = `<!DOCTYPE html>
 
     fetchAccounts();
     fetchStatus();
+
+    // Model Mappings
+    async function fetchMappings() {
+      try {
+        const res = await fetch(API_BASE + '/model-mappings');
+        const data = await res.json();
+        renderMappings(data.modelMapping || {});
+      } catch (e) {
+        document.getElementById('mappingList').innerHTML = '<tr><td colspan="3" class="empty-state">Failed to load mappings</td></tr>';
+      }
+    }
+    function renderMappings(mappings) {
+      const tbody = document.getElementById('mappingList');
+      const entries = Object.entries(mappings);
+      if (entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No mappings configured.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = entries.map(([from, to]) =>
+        '<tr style="border-bottom:1px solid #21262d;">' +
+        '<td style="padding:0.5rem 1rem; font-family:monospace;">' + from + '</td>' +
+        '<td style="padding:0.5rem 1rem; font-family:monospace;">' + to + '</td>' +
+        '<td style="padding:0.5rem 1rem;"><button class="btn btn-danger btn-sm" onclick="deleteMapping(\\''+from+'\\')">Delete</button></td>' +
+        '</tr>'
+      ).join('');
+    }
+    async function deleteMapping(from) {
+      if (!confirm('Delete mapping for "' + from + '"?')) return;
+      try {
+        const res = await fetch(API_BASE + '/model-mappings/' + encodeURIComponent(from), { method: 'DELETE' });
+        if (res.ok) fetchMappings();
+        else { const d = await res.json(); alert(d.error?.message || 'Failed'); }
+      } catch (e) { alert('Failed to delete mapping'); }
+    }
+    window.deleteMapping = deleteMapping;
+    async function loadModelOptions() {
+      const sel = document.getElementById('mappingTo');
+      try {
+        const res = await fetch('/v1/models');
+        const data = await res.json();
+        sel.innerHTML = '<option value="">Select target model</option>' +
+          (data.data || []).map(m => '<option value="' + m.id + '">' + m.id + '</option>').join('');
+      } catch (e) {
+        sel.innerHTML = '<option value="">Failed to load models</option>';
+      }
+    }
+    document.getElementById('addMappingBtn').addEventListener('click', () => {
+      document.getElementById('mappingFormArea').style.display = 'block';
+      document.getElementById('mappingFrom').value = '';
+      loadModelOptions();
+      document.getElementById('mappingFrom').focus();
+    });
+    document.getElementById('cancelMappingBtn').addEventListener('click', () => {
+      document.getElementById('mappingFormArea').style.display = 'none';
+    });
+    document.getElementById('saveMappingBtn').addEventListener('click', async () => {
+      const from = document.getElementById('mappingFrom').value.trim();
+      const to = document.getElementById('mappingTo').value.trim();
+      if (!from || !to) { alert('Both fields are required'); return; }
+      try {
+        const res = await fetch(API_BASE + '/model-mappings/' + encodeURIComponent(from), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to })
+        });
+        if (res.ok) {
+          document.getElementById('mappingFormArea').style.display = 'none';
+          fetchMappings();
+        } else {
+          const d = await res.json();
+          alert(d.error?.message || 'Failed to save');
+        }
+      } catch (e) { alert('Failed to save mapping'); }
+    });
   </script>
 </body>
 </html>`

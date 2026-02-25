@@ -19,6 +19,7 @@ export interface AppConfig {
     string,
     "none" | "minimal" | "low" | "medium" | "high" | "xhigh"
   >
+  modelMapping?: Record<string, string>
   useFunctionApplyPatch?: boolean
   // Account management
   accounts?: Array<AccountConfig>
@@ -179,4 +180,9 @@ export function getReasoningEffortForModel(
   }
 
   return "high"
+}
+
+export function getMappedModel(model: string): string {
+  const config = getConfig()
+  return config.modelMapping?.[model] ?? model
 }

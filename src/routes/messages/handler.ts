@@ -3,7 +3,7 @@ import type { Context } from "hono"
 import consola from "consola"
 import { streamSSE } from "hono/streaming"
 
-import { getSmallModel } from "~/lib/config"
+import { getMappedModel, getSmallModel } from "~/lib/config"
 import { createHandlerLogger } from "~/lib/logger"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { state } from "~/lib/state"
@@ -58,6 +58,8 @@ export async function handleCompletion(c: Context) {
   if (anthropicBeta && noTools) {
     anthropicPayload.model = getSmallModel()
   }
+
+  anthropicPayload.model = getMappedModel(anthropicPayload.model)
 
   // Merge tool_result and text blocks into tool_result to avoid consuming premium requests
   // (caused by skill invocations, edit hooks, plan or to do reminders)
