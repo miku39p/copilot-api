@@ -1,10 +1,24 @@
 import type { AnthropicMessagesPayload } from "./anthropic-types"
 
 interface AnthropicToolLike {
+  type?: unknown
   name?: unknown
   description?: unknown
   input_schema?: unknown
 }
+
+const ANTHROPIC_SERVER_TOOL_TYPES = new Set([
+  "web_search",
+  "web_search_20250305",
+  "text_editor_20250124",
+  "text_editor_20250429",
+  "code_execution_20250522",
+  "mcp",
+  "computer_20250124",
+])
+
+const isServerSideTool = (tool: AnthropicToolLike): boolean =>
+  typeof tool.type === "string" && ANTHROPIC_SERVER_TOOL_TYPES.has(tool.type)
 
 const sanitizeAnthropicTool = (
   tool: AnthropicToolLike,
@@ -37,7 +51,9 @@ export function sanitizeAnthropicPayload(
     return
   }
 
-  payload.tools = payload.tools.map((tool) =>
-    sanitizeAnthropicTool(tool as AnthropicToolLike),
-  ) as unknown as AnthropicMessagesPayload["tools"]
+  payload.tools = payload.tools
+    .filter((tool) => !isServerSideTool(tool as AnthropicToolLike))
+    .map((tool) =>
+      sanitizeAnthropicTool(tool as AnthropicToolLike),
+    ) as unknown as AnthropicMessagesPayload["tools"]
 }

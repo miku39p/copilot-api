@@ -15,14 +15,3 @@ export const codeInterpreterOutputSchema = z.object({
     )
     .nullish(),
 })
-
-export const codeInterpreterArgsSchema = z.object({
-  container: z
-    .union([
-      z.string(),
-      z.object({
-        fileIds: z.array(z.string()).optional(),
-      }),
-    ])
-    .optional(),
-})

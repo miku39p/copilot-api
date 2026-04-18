@@ -5,7 +5,6 @@ import {
   type LanguageModelV2CallWarning,
   type LanguageModelV2Content,
   type LanguageModelV2FinishReason,
-  type LanguageModelV2ProviderDefinedTool,
   type LanguageModelV2StreamPart,
   type LanguageModelV2Usage,
   type SharedV2ProviderMetadata,
@@ -39,29 +38,6 @@ import {
 import { fileSearchOutputSchema } from "./tool/file-search"
 import { imageGenerationOutputSchema } from "./tool/image-generation"
 import { localShellInputSchema } from "./tool/local-shell"
-
-const webSearchCallItem = z.object({
-  type: z.literal("web_search_call"),
-  id: z.string(),
-  status: z.string(),
-  action: z
-    .discriminatedUnion("type", [
-      z.object({
-        type: z.literal("search"),
-        query: z.string().nullish(),
-      }),
-      z.object({
-        type: z.literal("open_page"),
-        url: z.string(),
-      }),
-      z.object({
-        type: z.literal("find"),
-        url: z.string(),
-        pattern: z.string(),
-      }),
-    ])
-    .nullish(),
-})
 
 const fileSearchCallItem = z.object({
   type: z.literal("file_search_call"),
@@ -245,20 +221,6 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
       addInclude("message.output_text.logprobs")
     }
 
-    // when a web search tool is present, automatically include the sources:
-    const webSearchToolName = (
-      tools?.find(
-        (tool) =>
-          tool.type === "provider-defined"
-          && (tool.id === "openai.web_search"
-            || tool.id === "openai.web_search_preview"),
-      ) as LanguageModelV2ProviderDefinedTool | undefined
-    )?.name
-
-    if (webSearchToolName) {
-      addInclude("web_search_call.action.sources")
-    }
-
     // when a code interpreter tool is present, automatically include the outputs:
     if (hasOpenAITool("openai.code_interpreter")) {
       addInclude("code_interpreter_call.outputs")
@@ -402,7 +364,6 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
     })
 
     return {
-      webSearchToolName,
       args: {
         ...baseArgs,
         tools: openaiTools,
@@ -415,11 +376,7 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
   async doGenerate(
     options: Parameters<LanguageModelV2["doGenerate"]>[0],
   ): Promise<Awaited<ReturnType<LanguageModelV2["doGenerate"]>>> {
-    const {
-      args: body,
-      warnings,
-      webSearchToolName,
-    } = await this.getArgs(options)
+    const { args: body, warnings } = await this.getArgs(options)
     const url = this.config.url({
       path: "/responses",
       modelId: this.modelId,
@@ -482,7 +439,6 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
                   }),
                 ),
               }),
-              webSearchCallItem,
               fileSearchCallItem,
               codeInterpreterCallItem,
               imageGenerationCallItem,
@@ -665,27 +621,6 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
           break
         }
 
-        case "web_search_call": {
-          content.push(
-            {
-              type: "tool-call",
-              toolCallId: part.id,
-              toolName: webSearchToolName ?? "web_search",
-              input: JSON.stringify({ action: part.action }),
-              providerExecuted: true,
-            },
-            {
-              type: "tool-result",
-              toolCallId: part.id,
-              toolName: webSearchToolName ?? "web_search",
-              result: { status: part.status },
-              providerExecuted: true,
-            },
-          )
-
-          break
-        }
-
         case "computer_call": {
           content.push(
             {
@@ -811,11 +746,7 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
   async doStream(
     options: Parameters<LanguageModelV2["doStream"]>[0],
   ): Promise<Awaited<ReturnType<LanguageModelV2["doStream"]>>> {
-    const {
-      args: body,
-      warnings,
-      webSearchToolName,
-    } = await this.getArgs(options)
+    const { args: body, warnings } = await this.getArgs(options)
 
     const { responseHeaders, value: response } = await postJsonToApi({
       url: this.config.url({
@@ -916,20 +847,6 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
                     type: "tool-input-start",
                     id: value.item.call_id,
                     toolName: value.item.name,
-                  })
-
-                  break
-                }
-                case "web_search_call": {
-                  ongoingToolCalls[value.output_index] = {
-                    toolName: webSearchToolName ?? "web_search",
-                    toolCallId: value.item.id,
-                  }
-
-                  controller.enqueue({
-                    type: "tool-input-start",
-                    id: value.item.id,
-                    toolName: webSearchToolName ?? "web_search",
                   })
 
                   break
@@ -1052,32 +969,6 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
                         itemId: value.item.id,
                       },
                     },
-                  })
-
-                  break
-                }
-                case "web_search_call": {
-                  ongoingToolCalls[value.output_index] = undefined
-
-                  controller.enqueue({
-                    type: "tool-input-end",
-                    id: value.item.id,
-                  })
-
-                  controller.enqueue({
-                    type: "tool-call",
-                    toolCallId: value.item.id,
-                    toolName: "web_search",
-                    input: JSON.stringify({ action: value.item.action }),
-                    providerExecuted: true,
-                  })
-
-                  controller.enqueue({
-                    type: "tool-result",
-                    toolCallId: value.item.id,
-                    toolName: "web_search",
-                    result: { status: value.item.status },
-                    providerExecuted: true,
                   })
 
                   break
@@ -1501,17 +1392,6 @@ const responseOutputItemAddedSchema = z.object({
       arguments: z.string(),
     }),
     z.object({
-      type: z.literal("web_search_call"),
-      id: z.string(),
-      status: z.string(),
-      action: z
-        .object({
-          type: z.literal("search"),
-          query: z.string().optional(),
-        })
-        .nullish(),
-    }),
-    z.object({
       type: z.literal("computer_call"),
       id: z.string(),
       status: z.string(),
@@ -1565,7 +1445,6 @@ const responseOutputItemDoneSchema = z.object({
     }),
     codeInterpreterCallItem,
     imageGenerationCallItem,
-    webSearchCallItem,
     fileSearchCallItem,
     localShellCallItem,
     z.object({

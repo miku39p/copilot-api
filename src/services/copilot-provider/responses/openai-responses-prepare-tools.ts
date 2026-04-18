@@ -4,15 +4,12 @@ import {
   type LanguageModelV2CallWarning,
   UnsupportedFunctionalityError,
 } from "@ai-sdk/provider"
-import { z } from "zod/v4"
 
-import type { OpenAIResponsesTool } from "./openai-responses-api-types"
-
-import { codeInterpreterArgsSchema } from "./tool/code-interpreter"
-import { fileSearchArgsSchema } from "./tool/file-search"
-import { imageGenerationArgsSchema } from "./tool/image-generation"
-import { webSearchArgsSchema } from "./tool/web-search"
-import { webSearchPreviewArgsSchema } from "./tool/web-search-preview"
+import type {
+  OpenAIResponsesFileSearchToolComparisonFilter,
+  OpenAIResponsesFileSearchToolCompoundFilter,
+  OpenAIResponsesTool,
+} from "./openai-responses-api-types"
 
 export function prepareResponsesTools({
   tools,
@@ -29,8 +26,6 @@ export function prepareResponsesTools({
     | "none"
     | "required"
     | { type: "file_search" }
-    | { type: "web_search_preview" }
-    | { type: "web_search" }
     | { type: "function"; name: string }
     | { type: "code_interpreter" }
     | { type: "image_generation" }
@@ -60,22 +55,27 @@ export function prepareResponsesTools({
         break
       }
       case "provider-defined": {
+        const args = tool.args
         switch (tool.id) {
           case "openai.file_search": {
-            const args = fileSearchArgsSchema.parse(tool.args)
-
+            const ranking = args.ranking as
+              | { ranker?: string; scoreThreshold?: number }
+              | undefined
             openaiTools.push({
               type: "file_search",
-              vector_store_ids: args.vectorStoreIds,
-              max_num_results: args.maxNumResults,
+              vector_store_ids: args.vectorStoreIds as Array<string>,
+              max_num_results: args.maxNumResults as number | undefined,
               ranking_options:
-                args.ranking ?
+                ranking ?
                   {
-                    ranker: args.ranking.ranker,
-                    score_threshold: args.ranking.scoreThreshold,
+                    ranker: ranking.ranker,
+                    score_threshold: ranking.scoreThreshold,
                   }
                 : undefined,
-              filters: args.filters,
+              filters: args.filters as
+                | OpenAIResponsesFileSearchToolComparisonFilter
+                | OpenAIResponsesFileSearchToolCompoundFilter
+                | undefined,
             })
 
             break
@@ -86,30 +86,7 @@ export function prepareResponsesTools({
             })
             break
           }
-          case "openai.web_search_preview": {
-            const args = webSearchPreviewArgsSchema.parse(tool.args)
-            openaiTools.push({
-              type: "web_search_preview",
-              search_context_size: args.searchContextSize,
-              user_location: args.userLocation,
-            })
-            break
-          }
-          case "openai.web_search": {
-            const args = webSearchArgsSchema.parse(tool.args)
-            openaiTools.push({
-              type: "web_search",
-              filters:
-                args.filters !== null && args.filters !== undefined ?
-                  { allowed_domains: args.filters.allowedDomains }
-                : undefined,
-              search_context_size: args.searchContextSize,
-              user_location: args.userLocation,
-            })
-            break
-          }
           case "openai.code_interpreter": {
-            const args = codeInterpreterArgsSchema.parse(tool.args)
             openaiTools.push({
               type: "code_interpreter",
               container: getCodeInterpreterContainer(args.container),
@@ -117,25 +94,45 @@ export function prepareResponsesTools({
             break
           }
           case "openai.image_generation": {
-            const args = imageGenerationArgsSchema.parse(tool.args)
+            const inputImageMask = args.inputImageMask as
+              | { fileId?: string; imageUrl?: string }
+              | undefined
             openaiTools.push({
               type: "image_generation",
-              background: args.background,
-              input_fidelity: args.inputFidelity,
+              background: args.background as
+                | "auto"
+                | "opaque"
+                | "transparent"
+                | undefined,
+              input_fidelity: args.inputFidelity as "low" | "high" | undefined,
               input_image_mask:
-                args.inputImageMask ?
+                inputImageMask ?
                   {
-                    file_id: args.inputImageMask.fileId,
-                    image_url: args.inputImageMask.imageUrl,
+                    file_id: inputImageMask.fileId,
+                    image_url: inputImageMask.imageUrl,
                   }
                 : undefined,
-              model: args.model,
-              moderation: args.moderation,
-              partial_images: args.partialImages,
-              quality: args.quality,
-              output_compression: args.outputCompression,
-              output_format: args.outputFormat,
-              size: args.size,
+              model: args.model as string | undefined,
+              moderation: args.moderation as "auto" | undefined,
+              partial_images: args.partialImages as number | undefined,
+              quality: args.quality as
+                | "auto"
+                | "low"
+                | "medium"
+                | "high"
+                | undefined,
+              output_compression: args.outputCompression as number | undefined,
+              output_format: args.outputFormat as
+                | "png"
+                | "jpeg"
+                | "webp"
+                | undefined,
+              size: args.size as
+                | "auto"
+                | "1024x1024"
+                | "1024x1536"
+                | "1536x1024"
+                | undefined,
             })
             break
           }
@@ -187,7 +184,7 @@ export function prepareResponsesTools({
 }
 
 function getCodeInterpreterContainer(
-  container: z.infer<typeof codeInterpreterArgsSchema>["container"],
+  container: unknown,
 ): Extract<OpenAIResponsesTool, { type: "code_interpreter" }>["container"] {
   if (container === null || container === undefined) {
     return { type: "auto", file_ids: undefined }
@@ -197,15 +194,14 @@ function getCodeInterpreterContainer(
     return container
   }
 
-  return { type: "auto", file_ids: container.fileIds }
+  const obj = container as { fileIds?: Array<string> }
+  return { type: "auto", file_ids: obj.fileIds }
 }
 
 function getBuiltInToolChoice(
   toolName: string,
 ):
   | { type: "file_search" }
-  | { type: "web_search_preview" }
-  | { type: "web_search" }
   | { type: "code_interpreter" }
   | { type: "image_generation" }
   | undefined {
@@ -218,12 +214,6 @@ function getBuiltInToolChoice(
     }
     case "image_generation": {
       return { type: "image_generation" }
-    }
-    case "web_search_preview": {
-      return { type: "web_search_preview" }
-    }
-    case "web_search": {
-      return { type: "web_search" }
     }
     default: {
       return undefined

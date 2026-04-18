@@ -240,7 +240,7 @@ volumes:
 本项目当前没有实现完整的 Claude Code / Codex 工具协议兼容层。工具支持以“尽量兼容”为主，范围主要受 GitHub Copilot 上游可稳定接受的工具形态限制。
 
 - **明确支持**：通过 OpenAI 兼容或 Anthropic 兼容请求传入的标准 `function` 工具。
-- **Responses 内建工具**：已支持 Copilot/OpenAI 风格的内建工具，包括 `web_search`、`web_search_preview`、`file_search`、`code_interpreter`、`image_generation`、`local_shell`，前提是上游模型和 endpoint 本身支持。
+- **Responses 内建工具**：已支持 Copilot/OpenAI 风格的内建工具，包括 `file_search`、`code_interpreter`、`image_generation`、`local_shell`，前提是上游模型和 endpoint 本身支持。注意：`web_search` 和 `web_search_preview` **不被** GitHub Copilot API 支持——Anthropic 服务端工具（如 Claude Code 的 `WebSearch`）会被自动过滤。如需网页搜索功能，建议使用 MCP server fetch 工具作为客户端侧替代。
 - **特殊兼容**：自定义 `apply_patch` 会被规范化为 `function` 工具，以提升兼容性。
 - **有限的文件编辑兼容**：常见自定义文件编辑工具名，如 `write`、`write_file`、`writefiles`、`edit`、`edit_file`、`multi_edit`、`multiedit`，会被规范化为 `function` 工具，避免在代理层被直接过滤掉。
 - **不保证兼容**：Claude Code、Codex、`superpowers` 或其他 agent 框架里的 skill 专用工具，如果依赖客户端自定义 schema、结果格式或特定执行语义，仍然可能失败，因为 Copilot 上游未必支持这些协议。

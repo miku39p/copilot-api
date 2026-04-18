@@ -15,7 +15,6 @@ export type OpenAIResponsesInputItem =
   | OpenAIResponsesItemReference
 
 export type OpenAIResponsesIncludeValue =
-  | "web_search_call.action.sources"
   | "code_interpreter_call.outputs"
   | "computer_call_output.output.image_url"
   | "file_search_call.results"
@@ -141,33 +140,6 @@ export type OpenAIResponsesTool =
       description: string | undefined
       parameters: JSONSchema7
       strict: boolean | undefined
-    }
-  | {
-      type: "web_search"
-      filters: { allowed_domains: Array<string> | undefined } | undefined
-      search_context_size: "low" | "medium" | "high" | undefined
-      user_location:
-        | {
-            type: "approximate"
-            city?: string
-            country?: string
-            region?: string
-            timezone?: string
-          }
-        | undefined
-    }
-  | {
-      type: "web_search_preview"
-      search_context_size: "low" | "medium" | "high" | undefined
-      user_location:
-        | {
-            type: "approximate"
-            city?: string
-            country?: string
-            region?: string
-            timezone?: string
-          }
-        | undefined
     }
   | {
       type: "code_interpreter"
